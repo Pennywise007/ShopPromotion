@@ -1,38 +1,21 @@
-﻿using System;
+﻿using OpenQA.Selenium;
+using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.Support.UI;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
-using OpenQA.Selenium.Support.UI;
 using WebDriverManager;
 using WebDriverManager.DriverConfigs.Impl;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.StartPanel;
 
 namespace ShopPromotion.Controller.Avito
 {
     class Controller : WebDriverHelper, IShopController
     {
-        protected override IWebDriver CreateWebDriver()
-        {
-            var options = new ChromeOptions();
-            // start new chrome as incognito
-            //options.AddArguments("--incognito");
-
-            // auto loading updates for chrome driver
-            try
-            {
-                var chromeDriverDirName = Path.GetDirectoryName(new DriverManager().SetUpDriver(new ChromeConfig(), "MatchingBrowser"));
-                return new ChromeDriver(chromeDriverDirName, options);
-            }
-            catch (Exception)
-            {
-                return new ChromeDriver(options);
-            }
-        }
-
         public void OpenMainShopPage()
         {
             OpenNewTab("https://www.avito.ru/");
@@ -64,8 +47,7 @@ namespace ShopPromotion.Controller.Avito
         public void AddCurrentItemToCart()
         {
             // we can't add to cart without logging in, just add to favorites
-            var itemActionsContext = Driver.FindElement(By.XPath(".//div[contains(@class, 'style-item-view-content-right')]"));
-            IWebElement favoriteButton = itemActionsContext.FindElement(By.XPath(".//button[@data-marker='item-view/favorite-button']"));
+            IWebElement favoriteButton = Driver.FindElement(By.XPath(".//button[@data-marker = 'item-view/favorite-button']"));
 
             // item already in fav
             if (favoriteButton.GetAttribute("data-is-favorite") == "true")
@@ -309,32 +291,9 @@ namespace ShopPromotion.Controller.Avito
             try
             {
                 // wait for buttons
-                var navigatorButtons = WaitForElements(By.XPath(".//*[contains(@class, 'image-frame-controlButtonArea')]"), TimeSpan.FromSeconds(5));
-                if (navigatorButtons.Count == 2)
-                {
-                    var dataDirectionFirstButton = navigatorButtons[0].GetAttribute("data-delta");
-                    if (dataDirectionFirstButton == "-1")
-                    {
-                        Trace.Assert(navigatorButtons[1].GetAttribute("data-delta") == "1", "У кнопок не совпали атрибуты data-delta");
-
-                        prevPicture = navigatorButtons[0];
-                        nextPicture = navigatorButtons[1];
-
-                        return true;
-                    }
-
-                    if (dataDirectionFirstButton == "1")
-                    {
-                        Trace.Assert(navigatorButtons[1].GetAttribute("data-delta") == "-1", "У кнопок не совпали атрибуты data-delta");
-
-                        prevPicture = navigatorButtons[1];
-                        nextPicture = navigatorButtons[0];
-
-                        return true;
-                    }
-
-                    Trace.Assert(false, "У кнопок навигации не известные значения у атрибута data-delta");
-                }
+                prevPicture = WaitForElement(By.XPath(".//div[@data-marker = 'image-frame/left-button']"), TimeSpan.FromSeconds(5));
+                nextPicture = Driver.FindElement(By.XPath(".//div[@data-marker = 'image-frame/right-button']"));
+                return true;
             }
             catch (NoSuchElementException) { }
             catch (WebDriverException) { }
@@ -371,9 +330,9 @@ namespace ShopPromotion.Controller.Avito
         {
             try
             {
-                ISearchContext previewContext = Driver.FindElement(By.XPath(".//*[contains(@class, 'images-preview-previewWrapper')]"));
+                ISearchContext previewContext = Driver.FindElement(By.XPath(".//ui[@data-marker = 'image-preview/preview-wrapper']"));
 
-                ReadOnlyCollection<IWebElement> previewItems = previewContext.FindElements(By.XPath(".//li[contains(@class, 'images-preview-previewImageWrapper')]"));
+                ReadOnlyCollection<IWebElement> previewItems = previewContext.FindElements(By.XPath(".//li[@data-marker = 'image-preview/item']"));
 
                 return previewItems.Select(element => new PreviewImages
                 {

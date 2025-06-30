@@ -49,7 +49,7 @@ namespace ShopPromotion.Controller.Etsy
             for (int index = switchPageButtonGroups.Count - 1; index >= 0; --index)
             {
                 var pageGroup = switchPageButtonGroups[index];
-                var buttonLink = ByLink.GetElementLink(pageGroup);
+                var buttonLink = pageGroup.GetElementLink();
 
                 if (string.IsNullOrEmpty(buttonLink))
                     continue;

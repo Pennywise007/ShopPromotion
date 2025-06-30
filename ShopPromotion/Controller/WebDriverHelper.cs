@@ -2,11 +2,16 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
+using System.Threading;
+using SeleniumUndetectedChromeDriver;
 using OpenQA.Selenium;
+using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Interactions;
 using OpenQA.Selenium.Support.UI;
-using System.Threading;
+using WebDriverManager;
+using WebDriverManager.DriverConfigs.Impl;
 
 namespace ShopPromotion.Controller
 {
@@ -34,15 +39,24 @@ namespace ShopPromotion.Controller
         }
     }
 
-    static class ByLink
+    static class ByText
     {
-        public static string GetElementLink(IWebElement elements)
+        public static By Contains(string text, string tag = "*")
+        {
+            return By.XPath($"//{tag}[contains(text(), '{text}')]");
+        }
+    }
+
+    // Extension for the IWebElement
+    public static class ExtensionMethods
+    {
+        public static string GetElementLink(this IWebElement element)
         {
             const string linkAttributeName = "href";
             string elementLink = null;
             try
             {
-                elementLink = elements.GetAttribute(linkAttributeName);
+                elementLink = element.GetAttribute(linkAttributeName);
             }
             catch (StaleElementReferenceException) { }
 
@@ -50,17 +64,52 @@ namespace ShopPromotion.Controller
             {
                 try
                 {
-                    var elementWithLink = elements.FindElement(By.XPath(".//a"));
+                    var elementWithLink = element.FindElement(By.XPath(".//a"));
                     elementLink = elementWithLink.GetAttribute(linkAttributeName) ?? elementWithLink.GetAttribute("data-href");
                 }
-                catch (NoSuchElementException) { }
+                catch (NoSuchElementException)
+                {
+                    try
+                    {
+                        elementLink = element.GetAttribute("onclick");
+                    }
+                    catch (Exception exception)
+                    {
+                        switch (exception)
+                        {
+                            case ThreadInterruptedException _:
+                            case ThreadAbortException _:
+                                throw;
+                        }
+                    }
+                }
                 catch (StaleElementReferenceException) { }
             }
             return elementLink;
         }
+
+        public static string GetElementText(this IWebElement element)
+        {
+            if (element == null)
+                return string.Empty;
+
+            string text = element.Text;
+            if (!string.IsNullOrEmpty(text))
+                return text;
+
+            text = element.GetAttribute("textContent");
+            if (!string.IsNullOrEmpty(text))
+                return text;
+
+            text = element.GetAttribute("innerText");
+            if (!string.IsNullOrEmpty(text))
+                return text;
+
+            return string.Empty;
+        }
     }
 
-    abstract class WebDriverHelper : IBrowserController
+    public class WebDriverHelper
     {
         private string _ip;
         private string _ipLocation;
@@ -72,7 +121,28 @@ namespace ShopPromotion.Controller
             set => _driver = value;
         }
 
-        protected abstract IWebDriver CreateWebDriver();
+        // Creating a web driver instance
+        public static IWebDriver CreateWebDriver()
+        {
+            var options = new ChromeOptions();
+            // start new chrome as incognito
+            //options.AddArguments("--incognito");
+
+            // auto loading updates for chrome driver
+            /* try
+            {
+                var chromeDriverDirName = Path.GetDirectoryName(new DriverManager().SetUpDriver(new ChromeConfig(), "MatchingBrowser"));
+                return new ChromeDriver(chromeDriverDirName, options);
+            }
+            catch (Exception)
+            {
+                return new ChromeDriver(options);
+            }*/
+
+            var chromeDriverDirName = Path.GetDirectoryName(new DriverManager().SetUpDriver(new ChromeConfig(), "MatchingBrowser"));
+            var chromeDriverPath = Path.Combine(chromeDriverDirName, "chromedriver.exe");
+            return UndetectedChromeDriver.Create(driverExecutablePath: chromeDriverPath, options: options);
+        }
 
         /// <exception cref="T:OpenQA.Selenium.NoSuchElementException">If no element matches the criteria.</exception>
         public string GetIpLocation()
@@ -93,7 +163,7 @@ namespace ShopPromotion.Controller
         /// <exception cref="T:OpenQA.Selenium.NoSuchWindowException">If the window cannot be found.</exception>
         public virtual void OpenNewTab(string newUrl)
         {
-            if (Driver.Url.Length == 0 || Driver.Url == "data:,")
+            if (Driver.Url.Length == 0 || Driver.Url == "data:," || Driver.Url == "")
             {
                 Driver.Url = newUrl;
                 return;
@@ -117,7 +187,7 @@ namespace ShopPromotion.Controller
         {
             Driver.Quit();
         }
-        
+
         public void MaximizeWindow()
         {
             Driver.Manage().Window.Maximize();
@@ -167,15 +237,22 @@ namespace ShopPromotion.Controller
         /// <exception cref="T:OpenQA.Selenium.NoSuchWindowException">If the window cannot be found.</exception>
         public void CloseCurrentTab()
         {
-            Trace.Assert(Driver.WindowHandles.Count > 0, "Нет вкладок для закрытия");
-
-            bool lastOpenedTab = Driver.WindowHandles.Count <= 1;
-
-            Driver.Close();
-
-            if (!lastOpenedTab)
-                Driver.SwitchTo().Window(Driver.WindowHandles.Last()); //switches to last opened tab
+            switch (Driver.WindowHandles.Count)
+            {
+                case 0:
+                    Trace.Assert(false, "Нет вкладок для закрытия");
+                    throw new NoSuchWindowException("Нет вкладок для закрытия");
+                case 1:
+                    Driver.Url = "data:,";
+                    return;
+                default:
+                    Driver.Close();
+                    Driver.SwitchTo().Window(Driver.WindowHandles.Last()); //switches to last opened tab
+                    break;
+            }
         }
+
+
 
         public void Back()
         {
@@ -217,7 +294,7 @@ namespace ShopPromotion.Controller
         {
             ((IJavaScriptExecutor)Driver).ExecuteScript("window.scrollTo(0, document.body.scrollHeight);");
         }
-        
+
         protected long GetPageHeight()
         {
             return (long)((IJavaScriptExecutor)Driver).ExecuteScript("return document.body.scrollHeight");

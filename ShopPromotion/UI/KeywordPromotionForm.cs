@@ -319,7 +319,7 @@ namespace ShopPromotion.UI
                 var shopListings = controller.GetShopListingsList(true);
                 foreach (var listing in shopListings)
                 {
-                    var link = ByLink.GetElementLink(listing);
+                    var link = listing.GetElementLink();
                     // remove extra symbols from the url
                     link = new Uri(link).GetLeftPart(UriPartial.Path);
 

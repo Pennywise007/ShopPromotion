@@ -17,24 +17,6 @@ namespace ShopPromotion.Controller.Etsy
 {
     class Controller : WebDriverHelper, IShopController
     {
-        protected override IWebDriver CreateWebDriver()
-        {
-            var options = new ChromeOptions();
-            // start new chrome as incognito
-            //options.AddArguments("--incognito");
-
-            // auto loading updates for chrome driver
-            try
-            {
-                var chromeDriverDirName = Path.GetDirectoryName(new DriverManager().SetUpDriver(new ChromeConfig(), "MatchingBrowser"));
-                return new ChromeDriver(chromeDriverDirName, options);
-            }
-            catch (Exception)
-            {
-                return new ChromeDriver(options);
-            }
-        }
-
         public void OpenMainShopPage()
         {
             OpenNewTab("https://www.etsy.com/");
@@ -264,7 +246,7 @@ namespace ShopPromotion.Controller.Etsy
         }
 
         /// <exception cref="T:OpenQA.Selenium.NotFoundException">If no element matches the criteria.</exception>
-        public string GetUserLocation() 
+        public string GetUserLocation()
         {
             OpenMainShopPage();
 
